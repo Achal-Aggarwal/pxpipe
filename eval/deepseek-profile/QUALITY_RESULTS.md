@@ -1,14 +1,14 @@
 # DeepSeek V4.1 Flash 1017 quality results
 
-Model: `@cf/deepseek-ai/deepseek-v4.1-flash-1017` (`deepseek-v4.1-flash-1017`) through Cloudflare Workers AI (via a local OpenAI-compatible gateway). Evaluated on the shipped native 14px profile (`resolveGptProfile('@cf/deepseek-ai/deepseek-v4.1-flash-1017')`: JetBrains Mono 14px, 84 cols, maxH 768, adjacent bounded factsheet), plus the Spleen 5×8 dense-hex baseline (`eval/verbatim-15`) and the 14px hex fixture (`eval/glm-profile/14px-fixture`).
+Model: `@cf/deepseek-ai/deepseek-v4.1-flash-1017` (`deepseek-v4.1-flash-1017`) through Cloudflare Workers AI (via a local OpenAI-compatible gateway). Evaluated on a JetBrains Mono 14px, 84-col, maxH 768 pilot profile (`PXPIPE_GPT_PROFILES` in `deepseek-client.mjs`, adjacent bounded factsheet) — no runtime pxpipe profile is shipped because DeepSeek V4.1 Flash's 98% native prompt-cache discount ($0.006 cached vs $0.30 uncached input) and 14px density (~2× vs ~5× on 5×8) leave negligible dollar savings — plus the Spleen 5×8 dense-hex baseline (`eval/verbatim-15`) and the 14px hex fixture (`eval/glm-profile/14px-fixture`).
 
-DeepSeek V4.1 Flash is a reasoning model: completion tokens are spent on `reasoning_content` before `content`. Workers AI enforces a hard 32-image ceiling per request (`Invalid data for image - reason too many images in request (max 32)`), so the shipped profile sets `providerImageCap: 32` and `maxHeightPx: 768` (764×760 px pages, staying within the 768 px no-resize square while keeping all 22 gist/state sessions at ≤26 images).
+DeepSeek V4.1 Flash is a reasoning model: completion tokens are spent on `reasoning_content` before `content`. Workers AI enforces a hard 32-image ceiling per request (`Invalid data for image - reason too many images in request (max 32)`), so the 14px evaluation recipe uses `maxHeightPx: 768` (764×760 px pages, staying within the 768 px no-resize square while keeping all 22 gist/state sessions at ≤26 images).
 
 ## Benchmark Summary
 
 | Geometry | Arithmetic (N=100) | Gist (N=98) | State (N=18) | Never-Stated (N=16) | Verbatim Hex (N=15) |
 |---|---:|---:|---:|---:|---:|
-| **JetBrains Mono 14px (84 cols, maxH 768, shipped)** | **100/100** (pure 100, text 100) | **98/98** | **18/18** | **0/16** | **8/15** (14px fixture) |
+| **JetBrains Mono 14px (84 cols, maxH 768, pilot)** | **100/100** (pure 100, text 100) | **98/98** | **18/18** | **0/16** | **8/15** (14px fixture) |
 | **Spleen 5×8 (312 cols, `eval/verbatim-15`)** | — | — | — | — | 0/15 |
 
 ## Arithmetic (N=100, novel numbers)

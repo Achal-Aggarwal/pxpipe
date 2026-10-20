@@ -3,6 +3,15 @@
 // or PXPIPE_GATEWAY_HEADERS when the gateway authenticates. DeepSeek V4.1 Flash
 // is a reasoning model: completion tokens are spent on reasoning_content before
 // content, so maxOutputTokens must leave room for both.
+process.env.PXPIPE_GPT_PROFILES ??= JSON.stringify({
+  'deepseek-v4.1': {
+    vision: { regime: 'mpix', tokensPerMegapixel: 1000 },
+    stripCols: 84,
+    maxHeightPx: 768,
+    style: { font: 'jetbrains-mono-14', aa: true, grid: false, gridCols: 0 },
+  },
+});
+
 function getAuthToken() {
   return process.env.OPENAI_API_KEY ?? '';
 }

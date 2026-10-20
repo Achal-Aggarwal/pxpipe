@@ -1102,7 +1102,6 @@ const PASSTHROUGH_PREFIXES = [
   '/openai/',
   '/google-ai-studio/',
   '/compat/',
-  '/workers-ai/',
 ] as const;
 
 function isProviderPrefixedPath(pathname: string): boolean {
