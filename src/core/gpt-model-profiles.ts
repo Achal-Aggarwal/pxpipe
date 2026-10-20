@@ -226,23 +226,45 @@ const GPT56_SOL_PROFILE: GptModelProfile = {
   },
 };
 
+const NATIVE_14PX_PROFILE: GptModelProfile = {
+  // Measured on grok-4.5 and Workers AI open-weight vision models: ~1000 image
+  // tokens per megapixel across page sizes. Native 14px / 84 cols (764px <= 768)
+  // is required where 5x8 bitmap glyphs are illegible to the vision encoder.
+  vision: { regime: 'mpix', tokensPerMegapixel: 1000 },
+  cacheReadRate: 0.25,
+  outputRate: 3,
+  stripCols: 84,
+  maxHeightPx: 512,
+  minCompressTokens: 500,
+  factSheetFormat: 'full',
+  history: { ...NATIVE_14PX_HISTORY },
+  style: {
+    ...BASE_STYLE,
+    font: 'jetbrains-mono-14',
+    aa: true,
+    grid: false,
+    gridCols: 0,
+  },
+};
+
+const WORKERS_AI_14PX_PROFILE: GptModelProfile = {
+  ...NATIVE_14PX_PROFILE,
+  // Workers AI hard-rejects requests over 32 images; budget history dynamically
+  // as 32 minus images already in the request.
+  providerImageCap: 32,
+};
+
 interface ProfileRule {
   test: (m: string) => boolean;
+  /** Optional broader family pattern. Any id matching `family` that fails `test`
+   *  is refused by `isMisresolvedModelId` instead of falling through to OpenAI tile math. */
+  family?: RegExp;
   profile: GptModelProfile;
 }
 
 /** True for the patch-billed mini/nano family (incl. o4-mini). */
 const isMiniNanoPatch = (m: string): boolean =>
   /^(?:gpt-5(?:\.\d+)?|gpt-4\.1)-(?:mini|nano)/.test(m) || /^o4-mini/.test(m);
-
-/** Grok ids pxpipe has a measured profile for. */
-const isGrokModel = (m: string): boolean => /^grok-/.test(m);
-
-/** Qwen 3.8 27B ids — the only Qwen geometry pxpipe has measured. Other Qwen
- *  variants deliberately do NOT match: the family-id guard below refuses them
- *  instead of gating an unmeasured model with this profile. */
-const isQwenModel = (m: string): boolean => /qwen3\.8-27b/i.test(m);
-
 /** Shared GPT geometry for the small patch-billed models; only the patch
  *  multiplier and the family list prices differ between the rules below. */
 const miniNanoProfile = (
@@ -311,61 +333,22 @@ const BUILTIN_RULES: ProfileRule[] = [
   // Grok remains opt-in. Native 14px / 84 cols / maxH 512 is the densest best
   // rung from the JB Mono 8–16px blind sweep (eval/grok-density/native-sweep).
   {
-    test: isGrokModel,
-    profile: {
-      // Measured 2026-07-09 on grok-4.5: image-token delta ≈ 1000 per megapixel
-      // across several page sizes (768x336 → 268, 764x980 → 748, etc.).
-      vision: { regime: 'mpix', tokensPerMegapixel: 1000 },
-      // xAI model pricing metadata: cachedPromptTokenPrice/promptTextTokenPrice
-      // = 5000/20000; completionTextTokenPrice/promptTextTokenPrice = 60000/20000.
-      cacheReadRate: 0.25,
-      outputRate: 3,
-      // Native 14px was the densest best rung on the Grok JB Mono 8–16px blind
-      // sweep (4/8 exact, 4 confab, 48% savings). 84 × 9px + pad = 764px ≤ 768.
-      // No rung was fully clean; 14px tied 15/16px on exact and beat smaller cells.
-      stripCols: 84,
-      maxHeightPx: 512,
-      minCompressTokens: 500,
-      factSheetFormat: 'full',
-      // pairs only groups INDEX-CONTIGUOUS tool rounds. Codex puts an assistant
-      // message between rounds, so every round is its own run and leftover
-      // history stays text — which is why grok-4.6 showed ~0 saved. mixed
-      // groups safe messages with completed pairs.
-      history: { ...NATIVE_14PX_HISTORY },
-      style: {
-        ...BASE_STYLE,
-        font: 'jetbrains-mono-14',
-        aa: true,
-        grid: false,
-        gridCols: 0,
-      },
-    },
+    family: /grok/,
+    test: (m) => /^grok-/.test(m),
+    profile: NATIVE_14PX_PROFILE,
   },
 
-  // Qwen 3.8 27B (Workers AI / open weights). Native 14px / 84 cols / maxH 512 is required
-  // because 5x8 bitmap glyphs are illegible to Qwen vision (0/15 hex vs 11/15 on 14px).
-  // Workers AI hard-rejects requests over 32 images, so providerImageCap makes the
-  // history budget dynamic: 32 minus every image already in the request.
+  // Workers AI open-weight vision models (Qwen 3.8 27B, DeepSeek V4.1 Flash).
+  // Unmeasured or text-only siblings are refused via `family`.
   {
-    test: isQwenModel,
-    profile: {
-      vision: { regime: 'mpix', tokensPerMegapixel: 1000 },
-      cacheReadRate: 0.25,
-      outputRate: 3,
-      providerImageCap: 32,
-      stripCols: 84,
-      maxHeightPx: 512,
-      minCompressTokens: 500,
-      factSheetFormat: 'full',
-      history: { ...NATIVE_14PX_HISTORY },
-      style: {
-        ...BASE_STYLE,
-        font: 'jetbrains-mono-14',
-        aa: true,
-        grid: false,
-        gridCols: 0,
-      },
-    },
+    family: /qwen/,
+    test: (m) => /qwen3\.8-27b/i.test(m),
+    profile: WORKERS_AI_14PX_PROFILE,
+  },
+  {
+    family: /deepseek/,
+    test: (m) => /deepseek-v4\.1(?:-|$)/i.test(m),
+    profile: { ...WORKERS_AI_14PX_PROFILE, maxHeightPx: 768, outputRate: 4 },
   },
 ];
 
@@ -376,8 +359,9 @@ const BUILTIN_RULES: ProfileRule[] = [
  */
 const FAMILY_ID_GUARDS: ReadonlyArray<{ mentions: RegExp; matches: (m: string) => boolean }> = [
   { mentions: /gemini/, matches: hasGeminiMeasuredProfile },
-  { mentions: /grok/, matches: isGrokModel },
-  { mentions: /qwen/, matches: isQwenModel },
+  ...BUILTIN_RULES
+    .filter((r): r is ProfileRule & { family: RegExp } => r.family !== undefined)
+    .map((r) => ({ mentions: r.family, matches: r.test })),
 ];
 
 /** True when the operator declared this id in PXPIPE_GPT_PROFILES. The guards
