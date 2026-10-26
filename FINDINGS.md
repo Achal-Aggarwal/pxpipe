@@ -1,10 +1,45 @@
 # FINDINGS — pxpipe (text→PNG token compression)
 
 **Status:** ⚠️ **VERDICT REVERSED — see correction below.** Originally ruled "dead"; live measurement shows pxpipe is a working *lossy gist-compressor* saving ~68% on real (dense) Claude Code traffic, with a known verbatim-recall gap.
-**Date:** 2026-05-28 (original) · 2026-05-29 (correction) · 2026-06-09 (Fable 5 update) · 2026-06-10 (gist-recall A/B, SWE-bench pilot) · 2026-06-12 (field observation, n=1) · 2026-06-23 (reframe: correct baseline = /compact) · 2026-07-09 (GPT-5.6 Sol raw-recall pilot) · 2026-07-19 (K/H glyph-surgery model-level A/B)
-**Models tested:** `claude-opus-4-5` (original run), `claude-opus-4-8` (re-test after a model bump), `claude-fable-5` (2026-06-09), `gpt-5.6-sol` (2026-07-09 raw-image pilot), `claude-opus-5` (2026-07-20 default-scope evaluation)
-**Model scope (current):** Fable 5, Gemini 3.6 Flash, and Gemini 3.7 Flash. Opus 5, Sol, GPT 5.5, and Grok remain explicit opt-ins.
+**Date:** 2026-05-28 (original) · 2026-05-29 (correction) · 2026-06-09 (Fable 5 update) · 2026-06-10 (gist-recall A/B, SWE-bench pilot) · 2026-06-12 (field observation, n=1) · 2026-06-23 (reframe: correct baseline = /compact) · 2026-07-09 (GPT-5.6 Sol raw-recall pilot) · 2026-07-19 (K/H glyph-surgery model-level A/B) · 2026-10-25 (Gemini 4 Argon factsheet-removal A/B on 6-document TokenSave corpus)
+**Models tested:** `claude-opus-4-5` (original run), `claude-opus-4-8` (re-test after a model bump), `claude-fable-5` (2026-06-09), `gpt-5.6-sol` (2026-07-09 raw-image pilot), `claude-opus-5` (2026-07-20 default-scope evaluation), `gemini-4-argon` (2026-10-17 / 2026-10-25)
+**Model scope (current):** Fable 5 (`claude-fable-5`), Opus 5.5 (`claude-opus-5-5`), and every Gemini model (`gemini`, including 3.6/3.7/3.8 Flash and Gemini 4). Opus 5, Sonnet 5.5, Sol, GPT 5.5, and Grok remain explicit opt-ins.
 **Harnesses:** Claude/Opus/Fable: `eval/needle-haystack/` (older receipts preserved from `/tmp/needle_eval`); Sol: `eval/sol-profile/` (raw responses and receipts committed)
+
+---
+
+## Update (2026-10-25) — Tested removing the text factsheet on `gemini-4-argon` (6-document TokenSave benchmark); kept factsheet in production
+
+**Verdict: Do not remove the bounded text factsheet, even on `gemini-4-argon` (15/15 on our 12-char `verbatim-hex` benchmark). Pure-image reading on `gemini-4-argon` dramatically outperforms every post-Fable-5 Claude release (`68/80` = 85% overall, `28/30` planted hex, `27/30` planted numbers, `10/10` Korean `prose_ko`, `4/5` unplanted log IDs vs `0/80` on Claude), but single-pixel `0`↔`8` / `6`↔`8` substitutions still occur inside 22-char `req_<18-hex>` strings and 5-digit numbers at 5×8 density. The factsheet stays.**
+
+### Why we tested removing the factsheet
+1. On our standard suite (`eval/gemini-profile/QUALITY_RESULTS.md`), `gemini-4-argon` scored **15/15** on pure-image 12-char dense hex (no factsheet) and **100/100** on pure-image novel arithmetic (no factsheet).
+2. An external benchmark ([TokenSave / `johnisking`](https://github.com/johnisking/token-cost-by-language/tree/main/text-as-image), 2026-10-21) tested four post-Fable-5 Claude models (`claude-haiku-5-5`, `claude-sonnet-5-5`, `claude-opus-5-5`, `claude-fable-5-1`) with `--tools ""` on 6 documents (`prose_en`, `prose_ko`, `prose_ja`, `code`, `json`, `log`, 80 questions per run). Because all four models have weak 5×8 pixel recall (0/15–6/15 on our table), they scored **3/60 to 14/60** on `images only` planted hex, **0/80** on unplanted log/JSON IDs outside the 96-token factsheet cap, and **3/10** on Korean prose numbers (`94392` read as `9392`), while `fable-5-1` attached real factsheet hashes to the wrong ticket.
+3. We wired `factSheetFormat: 'none'` on `GEMINI_PROFILE` and ran the exact 6-document, 80-question TokenSave corpus through `transformGoogleGenerateContent` on `gemini-4-argon` with **zero factsheet** (`1,120` image tokens/page vs `3,036–6,629` text tokens).
+
+### Results: `gemini-4-argon` pure image (no factsheet) vs. published Claude `images only`
+
+| Model & Arm | Planted Hex IDs | Planted Numbers | Korean `prose_ko` (Hex + Num) | Unplanted Log `req=` IDs | Unplanted JSON + Log Numbers |
+|---|---:|---:|---:|---:|---:|
+| **`gemini-4-argon` (pxpipe pure image, no factsheet)** | **28/30 (93.3%)** | **27/30 (90.0%)** | **10/10 (100%)** | **4/5 (80%)** | **7/10 (70%)** |
+| `claude-opus-5-5` (images only, published) | 14/60 (23.3%) | 29/60 (48.3%) | 0/20 (0%) | 1/20 (5%) | 12/20 (60%) |
+| `claude-sonnet-5-5` (images only, published) | 12/60 (20.0%) | 20/60 (33.3%) | 1/20 (5%) | 2/20 (10%) | 6/20 (30%) |
+| `claude-fable-5-1` (images only, published) | 3/60 (5.0%) | 6/60 (10.0%) | 5/20 (25%) | 0/20 (0%) | 0/20 (0%) |
+| `claude-haiku-5-5` (images only, published) | 3/60 (5.0%) | 10/60 (16.7%) | 0/20 (0%) | 0/20 (0%) | 0/20 (0%) |
+
+Per-document scores on `gemini-4-argon` (pure image, no factsheet):
+- `prose_en` (1568×400): **10/10** (5/5 hex, 5/5 numbers)
+- `prose_ko` (1568×424): **10/10** (5/5 hex, 5/5 numbers, including `T106 = 94392` exact)
+- `prose_ja` (1568×488): **9/10** (5/5 hex, 4/5 numbers; `T123` `28194` read as `81048`)
+- `code` (1568×408): **10/10** (5/5 hex, 5/5 numbers)
+- `json` (1568×536): **14/20** (4/5 planted hex, 4/5 planted numbers, 2/5 natural 22-char `req_<18-hex>` IDs, 4/5 natural numbers)
+- `log` (1568×632): **15/20** (4/5 planted hex, 4/5 planted numbers, 4/5 natural 12-char `req=` IDs, 3/5 natural numbers)
+
+### Why we put the factsheet back
+Inspecting the 12 pure-image misses on `gemini-4-argon` shows why the factsheet and strong vision are complementary rather than redundant:
+- **Single-pixel `0`↔`8` and `6`↔`8` confusions at 5×8:** In `json`, all 3 natural `req_` misses were single-character `8`→`0` flips inside 22-char strings (`req_709b2b8ff97e92994a` → `req_709b2b0ff97e92994a`, `req_0c5c3f3523980c711f` → `req_0c5c3f3523988c711f`, `req_28ea57a16b80463812` → `req_28ea57a16b00463812`), and the planted misses were `30141` → `38141`, `29497bb25f3d` → `2f897bb25f3d`, and `3ba8fc2fcd3b` → `3ba5fc2fcd3b`.
+- **Why the factsheet works on Gemini 4 / Fable 5 but failed on Fable 5.1 / Opus 5.5:** In Spleen 5×8, `0` and `8` differ by one interior pixel. A strong reader (`gemini-4-argon` at 93% pure-image hex) reads the image well enough to know *which* ticket/timestamp binds to *which* token (`29497bb25f3d` vs `2f897bb25f3d`, `30141` vs `38141`), and uses the adjacent factsheet to disambiguate that single `0`/`8` or `9`/`f` glyph — recovering the planted scores to **30/30** hex and **29/30** numbers without cross-binding errors. Conversely, a weak reader (`fable-5-1` at 5% pure-image hex) cannot read the image rows at all, so it blindly guesses pairings from the factsheet.
+- **Decision:** Reverted `factSheetFormat: 'none'` on `GEMINI_PROFILE` (kept `'compact'`), and updated `README.md` to report both the pure-image numbers and why the factsheet + live agent tools remain in production.
 
 ---
 
