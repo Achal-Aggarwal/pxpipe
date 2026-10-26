@@ -6,6 +6,18 @@ behavioral changes, patch = fixes).
 
 ## Unreleased
 
+## 0.15.1 — 2026-10-25
+
+### Added
+- **DeepSeek V4.1 Flash 1017 (`@cf/deepseek-ai/deepseek-v4.1-flash-1017`) quality evaluation and 14px pilot receipts** (#329). Spleen 5×8 is illegible to DeepSeek V4.1 Flash (0/15 dense hex); at JetBrains Mono 14px (`84 cols`, `maxHeightPx: 768` to stay under Workers AI's 32-image request limit), it scores 100/100 novel arithmetic, 98/98 gist recall, 18/18 state tracking, 0/16 never-stated confabulations, and 8/15 dense hex. Kept eval-only via `PXPIPE_GPT_PROFILES` because DeepSeek's 98% native prompt-cache discount leaves negligible dollar savings at 14px density.
+- **Model support tier matrix, Gemini 4 Argon (`15/15`) external 6-document benchmark, and `pxpipe warp` agent guide (`agy`, `omp`, `opencode`)** (#335). Clarifies Tier 1 full-fidelity readers (`gemini-4-argon` 15/15 pure-image hex, `gemini-3.6/3.7/3.8-flash` 14/15, June 2026 `claude-fable-5` 13/15) versus Tier 2 gist-only readers (`claude-opus-5-5` 3/15, `claude-fable-5-1` 6/15, `claude-opus-5` 2/15) and unsupported models (`claude-haiku-5-5`, `claude-sonnet-5-5`). Records the 6-document TokenSave pure-image evaluation on `gemini-4-argon` (93% planted hex, 90% planted numbers, 10/10 Korean `prose_ko`, 80% unplanted log `req=` IDs) and documents why the bounded factsheet remains enabled in production to disambiguate single-pixel `0`↔`8` glyph pairs at 5×8.
+
+### Fixed
+- **`pxpipe warp` matches default `:443` and `:80` ports on absolute-form requests, matching the `CONNECT` path** (#334). `URL.host` omits default ports, so a route pattern naming `api.anthropic.com:443/v1/*` or `example.com:80/v1/*` matched `CONNECT` (where `authority(host, port)` always includes the port) and silently missed identical requests arriving in absolute form. `handleAbsoluteForm` in `src/warp/connect.ts` now restores the implied default port (`443` for `https:`, `80` for `http:`) without double-bracketing IPv6 literals.
+- **Forward requests with malformed `messages` / `input` array elements untouched instead of returning `502`** (#326). A `null` or primitive element inside `messages[]` (`/v1/messages`, `/v1/chat/completions`) or `input[]` (`/v1/responses`) previously threw an unguarded `TypeError` inside the transform and returned `502 {"error":"pxpipe transform failed"}`. All three entry points now bail out with `reason: 'invalid_messages'` / `'invalid_input'` and forward the original bytes untouched so the upstream API returns its normal `400`.
+- **Honest baseline savings estimates under server-side thread continuations and self-busted image caches** (#328). `buildBaselineCountTokensBody` and `buildCacheablePrefixCountTokensBody` prepend synthetic `tool_use` blocks (`prependSyntheticToolUses`) when a server-side thread delta opens with an orphan `tool_result`, preventing `400` responses on `count_tokens` probes. `deriveBaselineWarmth` prices the text counterfactual warm on `cache_read === 0` when a fresh same-session prior (`< 300s`) with matching `model`, `system_sha8`, and `cache_prefix_tools_sha8` proves that pxpipe changed its own `cache_prefix_sha8`, charging self-inflicted image-cache misses to pxpipe rather than booking them as cold-text savings.
+- **Dependency security maintenance.** Bumped `pnpm.overrides.undici` from `7.30.0` to `7.30.1` so `pnpm audit` passes with 0 vulnerabilities.
+
 ## 0.15.0 — 2026-10-18
 
 ### Added
